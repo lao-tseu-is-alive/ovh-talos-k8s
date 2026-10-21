@@ -1,0 +1,104 @@
+
+project:
+  name: ovh-talos-k8s
+
+versions:
+  talos: v1.14.4
+  kubernetes: 1.36.5
+  cilium: 1.20.3
+  longhorn: 1.13.0
+  snapshot_controller: v8.6.0
+
+image_factory:
+  schematic_id: 88d1f7a5c4f1d3aba7df787c448c1d3d008ed29cfb34af53fa0df4336a56040b
+  iso: "factory.talos.dev/image/88d1f7a5c4f1d3aba7df787c448c1d3d008ed29cfb34af53fa0df4336a56040b/v1.14.4/metal-amd64.iso"
+  installer: "factory.talos.dev/metal-installer/88d1f7a5c4f1d3aba7df787c448c1d3d008ed29cfb34af53fa0df4336a56040b:v1.14.4"
+
+management:
+  workstation: pulsar-2021
+  tools:
+    helm: v4.3.1
+  bastion:
+    host: ovh-fw-k3s
+    internal_ip: 192.168.50.2
+    connection: ssh
+    tool_dir: /usr/local/bin
+    state_dir: /root/ovh-talos-state
+
+proxmox:
+  host: ovh-calc-sos-2025
+  preserve_existing_network: true
+  vm:
+    bios: ovmf
+    machine: q35
+    cpu_type: host
+    sockets: 1
+    cores: 4
+    memory_mib: 8192
+    balloon: 0
+    scsi_controller: virtio-scsi-pci
+    network_bridge: vmbr1
+    system_disk:
+      storage: local
+      size_gib: 64
+      talos_device: /dev/sda
+    longhorn_disk:
+      storage: local_data
+      size_gib: 100
+      talos_device: /dev/sdb
+
+cluster:
+  name: ovh-talos
+  endpoint: "https://ovh-talos-k8s:6443"
+  api_vip: 192.168.50.241
+  allow_workloads_on_controlplanes: true
+  pod_subnet: 10.244.0.0/16
+  service_subnet: 10.96.0.0/12
+
+  customization:
+    systemExtensions:
+      officialExtensions:
+        - siderolabs/iscsi-tools
+        - siderolabs/util-linux-tools
+        - siderolabs/qemu-guest-agent
+
+  nodes:
+    - name: ovh-gok8sm01
+      vmid: 601
+      ip: 192.168.50.61
+      mac: "bc:24:11:1b:34:30"
+      role: controlplane
+
+    - name: ovh-gok8sm02
+      vmid: 602
+      ip: 192.168.50.62
+      mac: "bc:24:11:ed:7c:f6"
+      role: controlplane
+
+    - name: ovh-gok8sm03
+      vmid: 603
+      ip: 192.168.50.63
+      mac: "bc:24:11:fb:b3:e1"
+      role: controlplane
+
+network:
+  interface: ens18
+  prefix_length: 24
+  gateway: 192.168.50.2
+  nameservers:
+    - 8.8.8.8
+  ingress_vip: 192.168.50.240
+
+storage:
+  provider: longhorn
+  dedicated_disk_per_node: true
+  volume_name: longhorn
+  mount_path: /var/mnt/longhorn
+  replica_count: 3
+  data_engine: v1
+  chart:
+    url: "https://github.com/longhorn/charts/releases/download/longhorn-1.13.0/longhorn-1.13.0.tgz"
+    sha256: e57f010d2a8bcf0da5b8b03ffecf49c5bc35ddc2663588ce8f22b7567b6133ed
+  snapshot_controller:
+    source_url: "https://github.com/kubernetes-csi/external-snapshotter/archive/refs/tags/v8.6.0.tar.gz"
+    sha256: 44bc3f2bb78cbd7fb6ebff5f5bb488e2171e2cef42849f85d28b85446f8956c4

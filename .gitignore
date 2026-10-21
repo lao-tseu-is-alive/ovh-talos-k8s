@@ -1,0 +1,7 @@
+# Generated Talos machine configurations contain cluster credentials.
+.generated/
+talosconfig
+secrets.yaml
+controlplane*.yaml
+kubeconfig
+
