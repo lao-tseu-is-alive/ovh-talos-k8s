@@ -90,7 +90,12 @@ echo "# allow all http trafic on port 80 to go out and back"
 #iptables -A OUTPUT -p tcp --dport 80  -m state --state NEW,ESTABLISHED -j ACCEPT
 #iptables -A INPUT -p tcp  --sport 80  -m state --state ESTABLISHED -j ACCEPT
 iptables -A OUTPUT -p tcp --dport 80 -j ACCEPT
-iptables -A INPUT -p tcp  --sport 80 -j ACCEPT
+# 2026-10-21 : ajout de --state ESTABLISHED. Sans controle d etat, tout paquet
+# envoye DEPUIS le port 80 etait accepte vers n importe quel port du bastion
+# (ex. ssh -p 22 depuis le port source 80), contournant la liste d IP SSH.
+# Les reponses aux connexions ouvertes par le bastion restent acceptees.
+#iptables -A INPUT -p tcp  --sport 80 -j ACCEPT
+iptables -A INPUT -p tcp  --sport 80 -m state --state ESTABLISHED -j ACCEPT
 echo "# allow all http trafic on port 80 to go out and back"
 iptables -A INPUT  -p tcp --dport 80 -j ACCEPT
 iptables -A OUTPUT -p tcp --sport 80 -j ACCEPT
@@ -98,7 +103,12 @@ iptables -A OUTPUT -p tcp --sport 80 -j ACCEPT
 echo "################################################################################"
 echo "# allow all https trafic on port 443 to go out and back"
 iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT
-iptables -A INPUT  -p tcp --sport 443 -j ACCEPT
+# 2026-10-21 : ajout de --state ESTABLISHED. Sans controle d etat, tout paquet
+# envoye DEPUIS le port 443 etait accepte vers n importe quel port du bastion
+# (ex. ssh -p 22 depuis le port source 443), contournant la liste d IP SSH.
+# Les reponses aux connexions ouvertes par le bastion restent acceptees.
+#iptables -A INPUT  -p tcp --sport 443 -j ACCEPT
+iptables -A INPUT  -p tcp --sport 443 -m state --state ESTABLISHED -j ACCEPT
 echo "# allow all https trafic on port 443 to go in and out"
 iptables -A INPUT  -p tcp --dport 443 -j ACCEPT
 iptables -A OUTPUT -p tcp --sport 443 -j ACCEPT
@@ -119,11 +129,18 @@ iptables -t nat -A POSTROUTING -s ${IPCARTO2026} -o ${EXTIF} -j SNAT --to-source
 iptables -t nat -A POSTROUTING -s 192.168.50.60 -o ${EXTIF} -j SNAT --to-source $EXTIP
 
 echo "# Allow DNS query to go in and out via UDP"
-iptables -A INPUT  -i ${EXTIF} -p udp --sport 53 -j ACCEPT
+# 2026-10-21 : ajout de --state ESTABLISHED. Sans controle d etat, tout paquet
+# envoye DEPUIS le port 53 etait accepte vers n importe quel port du bastion
+# (ex. ssh -p 22 depuis le port source 53), contournant la liste d IP SSH.
+# Les reponses aux connexions ouvertes par le bastion restent acceptees.
+#iptables -A INPUT  -i ${EXTIF} -p udp --sport 53 -j ACCEPT
+iptables -A INPUT  -i ${EXTIF} -p udp --sport 53 -m state --state ESTABLISHED -j ACCEPT
 iptables -A OUTPUT -o ${EXTIF} -p udp --dport 53 -j ACCEPT
 iptables -A INPUT  -i lo -p udp --sport 53 -j ACCEPT
 iptables -A OUTPUT -o lo -p udp --sport 53 -j ACCEPT
-iptables -A INPUT  -i ${EXTIF} -p tcp --sport 53 -j ACCEPT
+# 2026-10-21 : meme correction pour DNS en TCP (voir ci-dessus).
+#iptables -A INPUT  -i ${EXTIF} -p tcp --sport 53 -j ACCEPT
+iptables -A INPUT  -i ${EXTIF} -p tcp --sport 53 -m state --state ESTABLISHED -j ACCEPT
 iptables -A OUTPUT -o ${EXTIF} -p tcp --dport 53 -j ACCEPT
 
 #iptables -A OUTPUT -p udp -o ${EXTIF} --dport 53 --sport 1024:65535 -m state --state NEW,ESTABLISHED -j ACCEPT
