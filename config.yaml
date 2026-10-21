@@ -87,6 +87,7 @@ network:
   gateway: 192.168.50.2
   nameservers:
     - 8.8.8.8
+    - 1.1.1.1
   ingress_vip: 192.168.50.240
 
 storage:

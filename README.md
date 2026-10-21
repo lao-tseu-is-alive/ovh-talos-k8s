@@ -230,6 +230,30 @@ SHA-256 avant utilisation.
 - Un snapshot Longhorn de type `snap` protège contre une erreur logique locale,
   mais ne remplace pas une sauvegarde externalisée hors du cluster.
 
+## Sauvegardes Talos et etcd
+
+`scripts/backup-cluster.sh` sauvegarde, depuis la station de travail:
+
+- `state`: une archive de `/root/ovh-talos-state` (PKI Talos, `talosconfig`,
+  `kubeconfig`), indispensable pour administrer ou reconstruire le cluster;
+- `etcd`: un snapshot etcd conservé dans `/root/ovh-talos-backups/etcd` sur le
+  bastion, puis copié localement.
+
+Les copies locales sont chiffrées avec `age` dans `~/backups/ovh-talos`. Les
+sept dernières de chaque type sont conservées, sur le bastion comme en local.
+La clé privée age doit être stockée hors de cette station, par exemple dans un
+gestionnaire de mots de passe.
+
+```bash
+age-keygen -o ~/.config/age/ovh-talos.key    # une seule fois
+export AGE_RECIPIENT=age1...                 # clé publique affichée
+scripts/backup-cluster.sh                    # state + etcd
+```
+
+Restauration d'etcd: déchiffrer le snapshot avec
+`age --decrypt --identity <clé> etcd-<date>.db.age > etcd.db`, puis suivre la
+procédure Talos `talosctl bootstrap --recover-from=./etcd.db`.
+
 ## CI d'infrastructure
 
 ### Contrôles passifs
@@ -376,5 +400,7 @@ est valide.
 - Le script de pare-feu du bastion n'est pas encore géré par ce dépôt.
 - L'accès Talos depuis Internet par DNAT n'est pas encore configuré.
 - Il n'existe pas encore de cible de sauvegarde Longhorn externe.
+- Les sauvegardes Talos et etcd sont lancées à la main; aucune planification
+  n'est installée.
 - La CI est lancée à la demande depuis la station de travail; aucun ordonnanceur
   périodique n'est installé.
