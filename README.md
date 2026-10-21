@@ -70,6 +70,7 @@ le SNAT du réseau privé vers Internet.
 │   ├── backup-cluster.sh     sauvegardes chiffrées de l'état Talos et d'etcd
 │   ├── ovh-talos-k8s.sh      tunnel SSH et kubeconfig local vers l'API
 │   ├── ovk-kubectl.sh        kubectl local via le tunnel
+│   ├── bastion/              script de pare-feu du bastion (IP publiques hors Git)
 │   └── infra/
 │       ├── check-all.sh      orchestrateur passif ou actif
 │       ├── check-*.sh        contrôles passifs par composant
@@ -409,11 +410,30 @@ cluster en service, un patch `talosctl patch machineconfig` ajoute des entrées
 sans remplacer la liste: ne mettre que les nouvelles entrées et toujours
 valider par `--dry-run`.
 
+### Pare-feu du bastion
+
+`scripts/bastion/fwinit_ovh-fw-k3s.sh` est la source du pare-feu, déployée dans
+`/root/bin/` sur le bastion. Il vide puis reconstruit toutes les règles et les
+enregistre dans `/etc/iptables/rules.v4`. Le dépôt étant public, les IP
+publiques (sources SSH autorisées, IP externe) sont lues dans
+`/root/bin/fwinit_ovh-fw-k3s.env`, présent uniquement sur le bastion (`0600`,
+ignoré par Git). Modèle: `scripts/bastion/fwinit_ovh-fw-k3s.env.example`.
+
+Avant de lancer une nouvelle version, l'essayer à blanc dans un espace réseau
+isolé et comparer avec les règles en service:
+
+```bash
+grep -vE '^(iptables-save|ip6tables-save) >' fwinit_ovh-fw-k3s.sh > /tmp/dry.sh
+unshare --net sh -c 'FWINIT_ENV=/root/bin/fwinit_ovh-fw-k3s.env sh /tmp/dry.sh \
+  >/dev/null; iptables -S; iptables -t nat -S' > /tmp/dry.rules
+{ iptables -S; iptables -t nat -S; } | diff - /tmp/dry.rules
+```
+
 ### Horloge du bastion
 
 Le bastion se synchronise avec `systemd-timesyncd` sur des serveurs NTP IPv4
 fixés dans `/etc/systemd/timesyncd.conf.d/10-ipv4-ntp.conf`, car il n'a pas de
-route IPv6. Les règles NTP sortantes sont dans `/root/bin/fwinit_ovh-fw-k3s.sh`.
+route IPv6. Les règles NTP sortantes sont dans `fwinit_ovh-fw-k3s.sh`.
 
 ```bash
 timedatectl | grep synchronized
@@ -440,7 +460,8 @@ est valide.
 
 - Le dépôt ne crée pas les VM Proxmox; il documente leurs paramètres dans
   `config.yaml`.
-- Le script de pare-feu du bastion n'est pas encore géré par ce dépôt.
+- Le script de pare-feu du bastion est versionné dans `scripts/bastion/`, mais
+  son déploiement sur le bastion reste manuel.
 - L'accès Talos depuis Internet par DNAT n'est pas encore configuré.
 - Il n'existe pas encore de cible de sauvegarde Longhorn externe.
 - Les sauvegardes Talos et etcd sont lancées à la main; aucune planification

@@ -64,8 +64,11 @@ contrôler l'état réel avant de conclure qu'elle est encore exacte.
   `System clock synchronized: yes`). `generate-on-bastion.sh` réémet le
   certificat client de `talosconfig` avec l'heure du bastion.
 - Les règles du pare-feu du bastion sont produites par
-  `/root/bin/fwinit_ovh-fw-k3s.sh`, qui vide puis reconstruit tout le jeu de
-  règles et l'enregistre dans `/etc/iptables/rules.v4`. Avant de le lancer,
+  `scripts/bastion/fwinit_ovh-fw-k3s.sh`, déployé dans `/root/bin/`. Il vide
+  puis reconstruit tout le jeu de règles et l'enregistre dans
+  `/etc/iptables/rules.v4`. Le dépôt est public: ne jamais y écrire les IP
+  publiques, qui vivent dans `/root/bin/fwinit_ovh-fw-k3s.env` sur le
+  bastion. Modifier la version du dépôt, puis la déployer. Avant de le lancer,
   l'exécuter dans un espace réseau isolé (`unshare --net`, lignes
   `iptables-save` retirées) et comparer le résultat avec `iptables -S`.
 

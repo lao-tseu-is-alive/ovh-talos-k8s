@@ -8,3 +8,6 @@ kubeconfig
 
 # Python bytecode
 __pycache__/
+
+# Private values for scripts/bastion (public IPs)
+*.env
