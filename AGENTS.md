@@ -55,6 +55,14 @@ contrôler l'état réel avant de conclure qu'elle est encore exacte.
   nœuds arrivent sur `ens19` mais ne sont ni SNATés ni transmis vers Internet.
 - Le réglage persistant actuellement utilisé est
   `/etc/sysctl.d/99-ovh-fw-k3s-forward.conf`.
+- L'horloge du bastion doit être synchronisée (`timedatectl`:
+  `System clock synchronized: yes`). `generate-on-bastion.sh` réémet le
+  certificat client de `talosconfig` avec l'heure du bastion.
+- Les règles du pare-feu du bastion sont produites par
+  `/root/bin/fwinit_ovh-fw-k3s.sh`, qui vide puis reconstruit tout le jeu de
+  règles et l'enregistre dans `/etc/iptables/rules.v4`. Avant de le lancer,
+  l'exécuter dans un espace réseau isolé (`unshare --net`, lignes
+  `iptables-save` retirées) et comparer le résultat avec `iptables -S`.
 
 ## Discipline d'intervention
 
@@ -107,6 +115,19 @@ cas d'échec.
 - Pods Longhorn `Pending`: les trois nœuds avaient récupéré le taint control
   plane. Le taint a été retiré puis la correction a été persistée dans les
   configurations Talos rendues.
+- `talosctl: tls: expired certificate` après `generate-on-bastion.sh` (21
+  octobre 2026): l'horloge du bastion avançait d'environ 60 s, donc le nouveau
+  certificat client n'était pas encore valide pour les nœuds. Les règles NTP du
+  pare-feu exigeaient source et destination égales à l'IP du bastion et
+  bloquaient toute requête NTP sortante. Le `talosconfig` précédent a été
+  restauré, les règles NTP corrigées dans `fwinit_ovh-fw-k3s.sh` (commentaire
+  daté), et des serveurs NTP IPv4 fixés dans
+  `/etc/systemd/timesyncd.conf.d/10-ipv4-ntp.conf`, car le bastion n'a pas de
+  route IPv6.
+- Les patches `talosctl patch machineconfig` ajoutent aux listes des documents
+  multi-docs (par exemple `ResolverConfig.nameservers`) au lieu de les
+  remplacer. Toujours passer par `--dry-run` et ne mettre dans le patch que les
+  nouvelles entrées.
 - `helm list --all` n'est pas accepté par le Helm installé. Utiliser
   `helm list`, `helm history` et `helm status`.
 - Un service LoadBalancer sans backend peut annoncer sa VIP tout en présentant
