@@ -22,6 +22,7 @@ La plateforme suivante a été installée et testée le 21 octobre 2026:
 | VIP API Kubernetes | `192.168.50.241:6443` |
 | VIP Ingress | `192.168.50.240:80/443` |
 | Passerelle et bastion | `ovh-fw-k3s`, `192.168.50.2` |
+| DNS des nœuds | `8.8.8.8`, `1.1.1.1` |
 | Réseau pods | `10.244.0.0/16` |
 | Réseau services | `10.96.0.0/12` |
 
@@ -59,12 +60,16 @@ le SNAT du réseau privé vers Internet.
 ```text
 .
 ├── AGENTS.md                 consignes et invariants pour les futurs agents
+├── CLAUDE.md                 renvoi vers AGENTS.md
 ├── config.yaml               source de vérité non secrète
 ├── scripts/
 │   ├── render_talos.py       rendu des patches Talos non secrets
 │   ├── render_addons.py      rendu Cilium, Longhorn et snapshot-controller
 │   ├── check-static.sh       validation locale du dépôt et des rendus
 │   ├── run-infra-ci.sh       exécution distante des contrôles via SSH
+│   ├── backup-cluster.sh     sauvegardes chiffrées de l'état Talos et d'etcd
+│   ├── ovh-talos-k8s.sh      tunnel SSH et kubeconfig local vers l'API
+│   ├── ovk-kubectl.sh        kubectl local via le tunnel
 │   └── infra/
 │       ├── check-all.sh      orchestrateur passif ou actif
 │       ├── check-*.sh        contrôles passifs par composant
@@ -95,7 +100,10 @@ Sur la station de travail:
 - Python 3;
 - `uv` ou Python avec PyYAML;
 - accès SSH au bastion sous le nom défini dans `config.yaml`;
-- `scp`, `ssh`, `tar`.
+- `scp`, `ssh`, `tar`;
+- `age` pour `scripts/backup-cluster.sh`;
+- `/usr/local/bin/kubectl-1.36.5` et `~/.kube/ovh-talos` pour l'accès
+  kubectl local via le tunnel SSH.
 
 Sur le bastion:
 
@@ -154,6 +162,11 @@ chmod 0700 /root/ovh-talos-rendered \
 Le générateur réutilise `secrets.yaml` s'il existe, produit les trois
 configurations finales et les valide en mode `metal --strict`. Il ne faut pas
 remplacer les secrets d'un cluster existant.
+
+Il réémet aussi le certificat client de `talosconfig`, daté avec l'horloge du
+bastion. Vérifier d'abord `timedatectl` (`System clock synchronized: yes`) et
+conserver une copie du `talosconfig` en service: une horloge en avance produit
+un certificat refusé par les nœuds (`tls: expired certificate`).
 
 ### Application et bootstrap
 
@@ -353,6 +366,21 @@ kubectl get volumesnapshotcontents
 Avant une maintenance disruptive, exécuter au minimum la CI passive et vérifier
 qu'aucun volume Longhorn n'est `degraded` ou `faulted`.
 
+### Accès kubectl depuis la station de travail
+
+L'API n'est pas exposée sur Internet. Elle est jointe par un tunnel SSH via le
+bastion, avec une copie locale du kubeconfig dans `~/.kube/ovh-talos` pointant
+vers `https://127.0.0.1:16443` et `tls-server-name: ovh-talos-k8s` (nom présent
+dans le certificat de l'API).
+
+```bash
+scripts/ovh-talos-k8s.sh          # kubeconfig local, tunnel, vérification
+scripts/ovk-kubectl.sh get nodes  # kubectl avec ~/.kube/ovh-talos
+```
+
+`ovk-kubectl.sh` échoue immédiatement si aucun tunnel n'écoute sur
+`127.0.0.1:16443` et affiche la commande `ssh` à lancer.
+
 ## Dépendance réseau du bastion
 
 Le trafic sortant des nœuds dépend du routage IPv4 et des règles SNAT du
@@ -374,9 +402,23 @@ Symptôme connu si le forwarding repasse à zéro: les journaux Talos montrent d
 timeouts vers `8.8.8.8:53`, les requêtes sont visibles en entrée sur `ens19`, les
 compteurs SNAT restent à zéro et les pods passent en `ImagePullBackOff`.
 
-Le DNS `8.8.8.8` est actuellement configuré dans Talos. Dans un autre contexte,
-adapter `network.nameservers` à des résolveurs réellement joignables depuis le
-réseau des nœuds.
+Les DNS `8.8.8.8` et `1.1.1.1` sont actuellement configurés dans Talos. Dans un
+autre contexte, adapter `network.nameservers` à des résolveurs réellement
+joignables depuis le réseau des nœuds. Pour modifier cette liste sur un
+cluster en service, un patch `talosctl patch machineconfig` ajoute des entrées
+sans remplacer la liste: ne mettre que les nouvelles entrées et toujours
+valider par `--dry-run`.
+
+### Horloge du bastion
+
+Le bastion se synchronise avec `systemd-timesyncd` sur des serveurs NTP IPv4
+fixés dans `/etc/systemd/timesyncd.conf.d/10-ipv4-ntp.conf`, car il n'a pas de
+route IPv6. Les règles NTP sortantes sont dans `/root/bin/fwinit_ovh-fw-k3s.sh`.
+
+```bash
+timedatectl | grep synchronized
+timedatectl timesync-status
+```
 
 ## Mise à niveau
 
@@ -386,7 +428,8 @@ Pour Talos, Kubernetes, Cilium, Longhorn ou external-snapshotter:
 2. modifier les versions et sommes SHA-256 dans `config.yaml`;
 3. exécuter `scripts/check-static.sh`;
 4. inspecter le diff des rendus;
-5. sauvegarder les données applicatives hors cluster;
+5. lancer `scripts/backup-cluster.sh` et sauvegarder les données applicatives
+   hors cluster;
 6. appliquer une stratégie de mise à niveau composant par composant;
 7. exécuter la CI passive puis `scripts/run-infra-ci.sh --smoke`.
 

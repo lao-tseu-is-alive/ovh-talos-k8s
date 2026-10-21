@@ -30,6 +30,11 @@ Ce dépôt décrit et exploite un cluster Kubernetes Talos à trois nœuds. Lire
 - Snapshot-controller `v8.6.0`, deux réplicas, uniquement les trois API CSI
   snapshot standards. Les VolumeGroupSnapshots ne sont pas installés.
 - Bastion/pare-feu: `ovh-fw-k3s`, passerelle interne `192.168.50.2`.
+- DNS des nœuds: `8.8.8.8` et `1.1.1.1`.
+- Accès local à l'API: tunnel SSH `127.0.0.1:16443` vers la VIP, kubeconfig
+  `~/.kube/ovh-talos` (voir `scripts/ovh-talos-k8s.sh` et `ovk-kubectl.sh`).
+- Sauvegardes: `scripts/backup-cluster.sh` (état Talos et etcd chiffrés avec
+  `age`; snapshots etcd aussi dans `/root/ovh-talos-backups/etcd`).
 
 Cette référence correspond au déploiement validé le 21 octobre 2026. Toujours
 contrôler l'état réel avant de conclure qu'elle est encore exacte.
