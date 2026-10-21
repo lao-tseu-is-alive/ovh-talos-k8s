@@ -5,3 +5,6 @@ secrets.yaml
 controlplane*.yaml
 kubeconfig
 
+
+# Python bytecode
+__pycache__/

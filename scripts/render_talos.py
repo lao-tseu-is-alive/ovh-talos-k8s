@@ -24,6 +24,20 @@ def required(mapping: dict, key: str, path: str):
     return mapping[key]
 
 
+def required_https_url(mapping: dict, key: str, path: str) -> None:
+    url = urlparse(required(mapping, key, path))
+    if url.scheme != "https" or not url.netloc:
+        fail(f"{path}.{key} must be an https URL")
+
+
+def required_sha256(mapping: dict, key: str, path: str) -> None:
+    digest = str(required(mapping, key, path))
+    if len(digest) != 64 or any(
+        character not in "0123456789abcdef" for character in digest
+    ):
+        fail(f"{path}.{key} must be a lowercase SHA-256 digest")
+
+
 def load_and_validate(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as stream:
         config = yaml.safe_load(stream)
@@ -115,40 +129,14 @@ def load_and_validate(path: Path) -> dict:
     if required(storage, "data_engine", "storage") != "v1":
         fail("storage.data_engine must be v1 for this Talos deployment")
     chart = required(storage, "chart", "storage")
-    chart_url = urlparse(required(chart, "url", "storage.chart"))
-    if chart_url.scheme != "https" or not chart_url.netloc:
-        fail("storage.chart.url must be an https URL")
-    chart_sha256 = str(required(chart, "sha256", "storage.chart"))
-    if len(chart_sha256) != 64 or any(
-        character not in "0123456789abcdef" for character in chart_sha256
-    ):
-        fail("storage.chart.sha256 must be a lowercase SHA-256 digest")
+    required_https_url(chart, "url", "storage.chart")
+    required_sha256(chart, "sha256", "storage.chart")
 
-    snapshot_controller = required(
-        storage, "snapshot_controller", "storage"
+    snapshot_controller = required(storage, "snapshot_controller", "storage")
+    required_https_url(
+        snapshot_controller, "source_url", "storage.snapshot_controller"
     )
-    snapshot_source_url = urlparse(
-        required(
-            snapshot_controller,
-            "source_url",
-            "storage.snapshot_controller",
-        )
-    )
-    if snapshot_source_url.scheme != "https" or not snapshot_source_url.netloc:
-        fail("storage.snapshot_controller.source_url must be an https URL")
-    snapshot_sha256 = str(
-        required(
-            snapshot_controller,
-            "sha256",
-            "storage.snapshot_controller",
-        )
-    )
-    if len(snapshot_sha256) != 64 or any(
-        character not in "0123456789abcdef" for character in snapshot_sha256
-    ):
-        fail(
-            "storage.snapshot_controller.sha256 must be a lowercase SHA-256 digest"
-        )
+    required_sha256(snapshot_controller, "sha256", "storage.snapshot_controller")
 
     return config
 

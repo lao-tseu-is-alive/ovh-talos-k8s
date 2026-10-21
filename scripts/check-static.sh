@@ -73,7 +73,7 @@ else
   printf 'INFO: shellcheck absent, contrôle optionnel ignoré.\n'
 fi
 
-if rg -n 'groupsnapshot' \
+if grep -n 'groupsnapshot' \
   "$work_dir/addons/snapshot-controller.yaml" \
   "$work_dir/addons/install-snapshot-controller.sh"
 then
