@@ -89,6 +89,17 @@ contrôler l'état réel avant de conclure qu'elle est encore exacte.
    leur âge avec les pods, rollouts et ressources actuels.
 7. En cas d'échec d'un smoke test, conserver son namespace pour diagnostic. Ne
    le supprimer qu'après inspection ou demande explicite.
+8. Pour un changement du pare-feu en service: montrer le diff de l'essai à
+   blanc, sauvegarder les règles actives, armer une restauration automatique
+   (`systemd-run --unit=fw-rollback --on-active=5min ...`), lancer le script
+   avec `nohup`, vérifier avec une nouvelle connexion SSH, puis seulement
+   annuler le minuteur (`systemctl stop fw-rollback.timer`). L'opérateur garde
+   une session SSH de secours ouverte.
+9. Toute modification d'un script sur le bastion est documentée par un
+   commentaire daté et précédée d'une copie de sauvegarde.
+10. Depuis la station de travail, ne jamais utiliser `kubectl` seul: il pointe
+    vers le cluster local Rancher Desktop. Utiliser `scripts/ovk-kubectl.sh`
+    (tunnel SSH requis), y compris pour `apply -k .`.
 
 ## Validation
 
@@ -141,3 +152,30 @@ cas d'échec.
 - Un service LoadBalancer sans backend peut annoncer sa VIP tout en présentant
   des ports filtrés. Le smoke test Ingress valide donc un backend réel et une
   requête HTTP complète.
+
+## Applications déployées
+
+- `go-cloud-k8s-shell` (namespace `go-testing`), manifestes kustomize dans le
+  dépôt voisin `../go-cloud-k8s-shell/deployments/ovh-talos/`. Chemin:
+  `https://go-cloud-k8s-shell.goeland.io` → nginx du bastion (TLS) →
+  `ovh-go-cloud-k8s-shell.lausanne.ch` (`/etc/hosts` du bastion) → VIP Ingress
+  `192.168.50.240:80` → Service `:9999`.
+- Pour une nouvelle application: `ingressClassName: cilium` obligatoire (Cilium
+  n'est pas la classe par défaut), hôte public dans les règles Ingress (nginx
+  transmet `Host $host`), pas de section TLS, pas de contrôleur sealed-secrets.
+  Une VIP Ingress sans Ingress répond `connection refused`, d'où des 502 nginx.
+
+## Travaux restants (22 octobre 2026)
+
+Vérifier l'état réel avant d'agir; aucun de ces points n'est encore approuvé.
+
+1. Supprimer sur le bastion les sauvegardes du 21 octobre
+   (`/root/ovh-talos-state-prev-*`, qui contient des secrets,
+   `/root/fw-rollback-20261021/`, `*.bak-20261021*`).
+2. Désactiver `PasswordAuthentication` de sshd sur le bastion si tous les
+   comptes utilisent des clés.
+3. Vérifier l'IPv6 du bastion (`ip -6 addr`): sshd écoute en IPv6 et la
+   politique ip6tables est `ACCEPT`.
+4. Planifier `scripts/backup-cluster.sh` et `scripts/run-infra-ci.sh` passif.
+5. Configurer une cible de sauvegarde Longhorn externe.
+6. Redéployer les autres applications (par exemple `go-cloud-k8s-info`).
